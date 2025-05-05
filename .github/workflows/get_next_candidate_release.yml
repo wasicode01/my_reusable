@@ -70,7 +70,7 @@ jobs:
 
       - name: Get last stable release by TAG
         id: get_last_release
-        working-directory: ./.github/scripts
+        working-directory:
         run: |
           chmod +x ./scripts_workflow/.github/scripts/get_last_release_by_tag.sh
           ./scripts_workflow/.github/scripts/get_last_release_by_tag.sh ${{github.repository}} ${{ inputs.version_name }}
