@@ -65,7 +65,7 @@ jobs:
           ref: main
       - name: demo
         run: |
-          cd ./scripts_workflow
+          cd ./scripts_workflow/.github/scripts
           ls -la
 
       - name: Get last stable release by TAG
