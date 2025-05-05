@@ -63,6 +63,10 @@ jobs:
           #token: ${{ secrets.GH_PATH }}
           path: './scripts_workflow'
           ref: main
+      - name: demo
+        run: |
+          cd ./scripts_workflow
+          ls -la
 
       - name: Get last stable release by TAG
         id: get_last_release
