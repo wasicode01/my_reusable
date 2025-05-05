@@ -59,7 +59,7 @@ jobs:
       - name: ⬇️ Download Scripts
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          repository: nriofrio2508/my_reusable #CAMBIAR
+          repository: wasicode01/my_reusable #CAMBIAR
           token: ${{ secrets.GH_PAT }}
           path: './scripts_workflow'
           ref: main
