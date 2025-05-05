@@ -1,0 +1,130 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  workflow_call:
+    inputs:
+      releaseCandidateVersion:
+        type: string
+        required: true
+        default: "v1.0.0"
+      
+      my_env:
+        type: string
+        required: true
+        default: "PRD"
+    outputs:
+      new_release_id:
+        description: "The last STG version"
+        value: ${{ jobs.create_release.outputs.new_id_release || jobs.create_pre_release.outputs.new_id_release }}
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  create_pre_release:
+    runs-on: ubuntu-latest
+    if: ${{inputs.my_env == 'STG' }}
+    outputs:
+      id_new_release: ${{ steps.create_release_step.outputs.id }}
+      new_id_release: ${{ steps.create_release_step.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push new Tag ReleaseCandidate
+        id: tag_release_candidate
+        run: |
+            tag='${{ inputs.releaseCandidateVersion }}'
+            message='${{ inputs.releaseCandidateVersion }}'
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git tag -a "${tag}" -m "${message}"
+            git push origin "${tag}"
+            echo "TAG_RELEASE_CANDIDATE=$tag" >> $GITHUB_OUTPUT
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get Last Tag
+        uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get_latest_tag
+        with:
+           semver_only: false
+      - name: Build Changelog
+        id: changelog_prd
+        uses: metcalfc/changelog-generator@v4.3.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+          head-ref: ${{ inputs.releaseCandidateVersion }}
+          base-ref: ${{ steps.get_latest_tag.outputs.tag }}
+          fetch: true
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release_step
+        with:
+          tag_name: ${{ inputs.releaseCandidateVersion  }}
+          release_name: 'Pre-Release ${{ inputs.releaseCandidateVersion }}'
+          body: |
+            Actor: ${{ github.actor }}
+            ActionRunner: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Changelog:
+            ${{ steps.changelog_prd.outputs.changelog }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Notify on Changelog Failure
+        if: failure() 
+        run: echo "The Build Changelog step has failed:set_outputs "
+  
+  create_release:
+    runs-on: ubuntu-latest
+    if: ${{inputs.my_env == 'PRD' }}
+    outputs:
+      id_new_release: ${{ steps.create_release_step.outputs.id }}
+      new_id_release: ${{ steps.new_step.outputs.id || steps.create_release_step.outputs.id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push new Tag ReleaseCandidate
+        id: tag_release_candidate
+        run: |
+            tag='${{ inputs.releaseCandidateVersion }}'
+            message='${{ inputs.releaseCandidateVersion }}'
+            git config user.name "${GITHUB_ACTOR}"
+            git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+            git tag -a "${tag}" -m "${message}"
+            git push origin "${tag}"
+            echo "TAG_RELEASE_CANDIDATE=$tag" >> $GITHUB_OUTPUT
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get Last Tag
+        uses: actions-ecosystem/action-get-latest-tag@v1
+        id: get_latest_tag
+        with:
+            semver_only: false
+      - name: Build Changelog
+        id: changelog_prd
+        uses: metcalfc/changelog-generator@v4.3.1
+        with:
+          myToken: ${{ secrets.GITHUB_TOKEN }}
+          head-ref: ${{ inputs.releaseCandidateVersion }}
+          base-ref: ${{ steps.get_latest_tag.outputs.tag }}
+          fetch: true
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release_step
+        with:
+          tag_name: ${{ inputs.releaseCandidateVersion  }}
+          release_name: 'Release ${{ inputs.releaseCandidateVersion }}'
+          body: |
+            Actor: ${{ github.actor }}
+            ActionRunner: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Changelog:
+            ${{ steps.changelog_prd.outputs.changelog }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Notify on Changelog Failure
+        if: failure() 
+        run: echo "The Build Changelog step has failed:set_outputs "

@@ -1,0 +1,14 @@
+name: Validate deploy
+on:
+  workflow_call:
+    inputs:
+      execute_matrix:
+        type: boolean
+
+jobs:
+  getMatrixStatus:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.execute_matrix == true }}
+    steps:
+      - name: Get matrix status
+        run: echo "Hello"

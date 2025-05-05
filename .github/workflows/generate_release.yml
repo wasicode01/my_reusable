@@ -1,0 +1,74 @@
+name: Validate deploy
+on:
+  workflow_call:
+    inputs:
+      execute_matrix:
+        type: boolean
+      matrix_dominio:
+        type: string
+        description: matrix_dominio
+
+jobs:
+  generateRelease:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.execute_matrix == true }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download blob reports from GitHub Actions Artifacts
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        with:
+          name: ${{ inputs.matrix_dominio }}
+      
+      - name: Outputs 
+        id: outputs_matrix
+        run: |
+          last_tag_repo=$(jq -r '.last_tag_repo' ${{ inputs.matrix_dominio }}.json)
+          next_tag_repo=$(jq -r '.next_tag_repo' ${{ inputs.matrix_dominio }}.json)
+          last_stable_release=$(jq -r '.last_stable_release' ${{ inputs.matrix_dominio }}.json)
+          echo "last_tag_repo=$last_tag_repo" >> $GITHUB_OUTPUT
+          echo "next_tag_repo=$next_tag_repo" >> $GITHUB_OUTPUT
+          echo "last_stable_release=$last_stable_release" >> $GITHUB_OUTPUT
+          echo "domain=$(echo $next_tag_repo | cut -d'-' -f1)" >> $GITHUB_OUTPUT
+          echo "subdomain=$(echo $next_tag_repo | cut -d'-' -f2)" >> $GITHUB_OUTPUT
+          echo "destination=$(echo $next_tag_repo | cut -d'-' -f3)" >> $GITHUB_OUTPUT
+          
+      - name: Get name new Release
+        id: get_name_new_release
+        run: |
+          new_release=$(echo ${{ steps.outputs_matrix.outputs.next_tag_repo }} | awk -F '-rc.' '{print $1}' )
+          echo "new_name_release=$new_release" >> $GITHUB_OUTPUT
+      
+      - name: Push new Tag ReleaseCandidate
+        id: tag_release_candidate
+        run: |
+          tag='${{ steps.get_name_new_release.outputs.new_name_release }}'
+          message='${{ steps.get_name_new_release.outputs.new_name_release }}'
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag -a "${tag}" -m "${message}"
+          git push origin "${tag}"
+          echo "TAG_RELEASE_CANDIDATE=$tag" >> $GITHUB_OUTPUT
+
+      - name: Build Changelog        
+        id: changelog_prd
+        working-directory: ./.github/scripts
+        run: |
+          chmod +x get_changelog.sh
+          {
+            echo 'changelog<<EOF'
+            ./get_changelog.sh ${{ steps.get_name_new_release.outputs.new_name_release}} "${{ steps.outputs_matrix.outputs.last_stable_release || ''}}" ${{github.repository}} false true ${{steps.outputs_matrix.outputs.domain}}/${{steps.outputs_matrix.outputs.subdomain}}/${{steps.outputs_matrix.outputs.destination}}
+          } >> "GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: '${{ steps.get_name_new_release.outputs.new_name_release }}'
+          release_name: '${{ steps.get_name_new_release.outputs.new_name_release }}'
+          body: |
+            Actor: ${{ github.actor }}
+            ActionRunner: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            ${{ steps.changelog_prd.outputs.changelog }}
